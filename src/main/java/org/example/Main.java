@@ -1,12 +1,5 @@
 package org.example;
 
-import java.io.*;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.URLDecoder;
-import java.nio.charset.StandardCharsets;
-import java.util.logging.Logger;
-
 /**
  * 사전 지식 (알고 있다 가정하는 것들)
  * 1. TCP/IP
@@ -15,6 +8,13 @@ import java.util.logging.Logger;
  * 2. HTTP
  *  2.1 OSI 7 Layer / 7계층
  */
+
+import org.h2.tools.Server;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 
 /**
  POST /create-developer HTTP/1.1
@@ -31,56 +31,46 @@ import java.util.logging.Logger;
  }
  */
 public class Main {
-    private static final Logger logger = Logger.getLogger(Main.class.getName());
-
     public static void main(String[] args) {
-        //1. HTTP Get으로 요청 받는다.
-        //2. 이 때 요청 파라미터로 이름(name)을 입력 받는다.
-        //3. 응답으로 html, Hello {name}!을 응답한다.
-        try (ServerSocket server = new ServerSocket(8080)) {
-            logger.info("HTTP 서버 Start! Port: "+8080);
-            // 클라이언트 요청이 올때까지 blocking!
-            Socket socket = server.accept();
+        try {
+            Server.createWebServer("-web", "-webAllowOthers", "-webPort", "8082").start();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+//        연습용_디비_준비();
 
-            InputStream in = socket.getInputStream();
+        int port = 8080;
+        HttpServer httpServer = new HttpServer(port);
+        httpServer.run();
 
-            InputStreamReader reader = new InputStreamReader(in);
-            BufferedReader br = new BufferedReader(reader);
+        //로그인
+        // 1. POST 요청으로 id, pw 받기
+        // 2. DB에 id, pw 일치하는지 확인
+        // 3. 로그인 성공했다면 HTTP 200 OK, 실패했다면 HTTP 400 BAD_REQUEST
+        //OTHER...
+        // 1. 로그인 화면도 있으면 좋음.
+    }
 
-            String line = br.readLine();
+    private static void 연습용_디비_준비() {
+        try (Connection con = DriverManager.getConnection("jdbc:h2:~/test;MODE=MySQL", "sa", "")) {
+            PreparedStatement createTable = con.prepareStatement("""
+                     CREATE TABLE users(
+                         id bigint auto_increment primary key,
+                         user_id varchar(500) not null unique,
+                         password varchar(500) not null
+                     );
+                     """);
+            createTable.execute();
+            createTable.close();
 
-            String[] name = line.split(" ");
-
-            name[1].substring(name[1].indexOf('=') + 1);
-            String realName = name[1].substring(name[1].indexOf('=') + 1);
-            realName = URLDecoder.decode(realName, StandardCharsets.UTF_8.toString());
-
-            logger.info("요청 접수! name: "+realName);
-
-            OutputStream out = socket.getOutputStream();
-
-            String body = """
-                     <html>
-                        <meta charset="UTF-8">
-                        <h1>Hello %s!</h1>
-                     </html>
-                    """.formatted(realName);
-
-            out.write("""
-                     HTTP/1.1 200 OK
-                     Content-Type: text/html; charset=utf-8
-                     Content-Length: %d
-                     
-                     %s
-                    """.formatted(body.length(), body).getBytes(StandardCharsets.UTF_8));
-            out.flush();
-
-            logger.info("요청 응답 완료! 200");
-
-            in.close();
-            out.close();
-            socket.close();
-        } catch (IOException e) {
+            PreparedStatement insertTestData = con.prepareStatement("""
+                    INSERT INTO users(user_id, password)
+                    VALUES('rlarjs', '1234'),
+                          ('eojin', '1234');
+                    """);
+            insertTestData.execute();
+            insertTestData.close();
+        } catch (SQLException e) {
             throw new RuntimeException(e);
         }
     }
